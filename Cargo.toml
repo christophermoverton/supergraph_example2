@@ -1,0 +1,10 @@
+[package]
+name = "supergraph_example2"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-graphql = "5.0"
+async-graphql-actix-web = "5.0"
+actix-web = "4.0"
+tokio = { version = "1.0", features = ["full"] }
