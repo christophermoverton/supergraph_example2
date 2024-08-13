@@ -6,7 +6,7 @@ use actix_web::{guard, HttpResponse};
 mod schema;
 mod db;
 
-use db::connect_to_neo4j;
+use db::connect_to_mongodb;
 
 async fn graphql_handler(schema: web::Data<schema::AppSchema>, req: GraphQLRequest) -> GraphQLResponse {
     schema.execute(req.into_inner()).await.into()
@@ -20,10 +20,10 @@ async fn graphql_playground() -> HttpResponse {
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let neo4j_graph = connect_to_neo4j("bolt://localhost:7687", "neo4j", "palapala").await;
+    let mongodb = connect_to_mongodb("mongodb://localhost:27017", "test").await;
 
     let schema = schema::create_schema()
-        .data(neo4j_graph) // Attach the Neo4j connection to the schema context
+        .data(mongodb)
         .finish();
 
     HttpServer::new(move || {

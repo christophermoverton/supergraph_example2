@@ -1,7 +1,6 @@
 use async_graphql::{Context, Object, Result, SimpleObject};
-use crate::db::Neo4jGraph;
-use neo4rs::query;
-//use tokio_stream::StreamExt;
+use crate::db::MongoDb;
+use mongodb::bson::doc;
 
 #[derive(SimpleObject)]
 pub struct Product {
@@ -16,17 +15,16 @@ pub struct Subgraph2Query;
 #[Object]
 impl Subgraph2Query {
     async fn product(&self, ctx: &Context<'_>, id: String) -> Result<Product> {
-        let graph = ctx.data::<Neo4jGraph>()?.lock().await;
-        let mut result = graph
-            .execute(query("MATCH (p:Product {id: $id}) RETURN p").param("id", id))
-            .await?;
+        let db = ctx.data::<MongoDb>()?.lock().await;
+        let collection: mongodb::Collection<mongodb::bson::Document> = db.collection("products");  // Type annotation here
+        let filter = doc! { "id": &id };
+        let product_doc = collection.find_one(filter, None).await?;
         
-        if let Ok(Some(row)) = result.next().await {
-            let node = row.get::<neo4rs::Node>("p").unwrap();
+        if let Some(product_doc) = product_doc {
             let product = Product {
-                id: node.get("id").unwrap(),
-                name: node.get("name").unwrap(),
-                price: node.get("price").unwrap(),
+                id: product_doc.get_str("id").unwrap().to_string(),
+                name: product_doc.get_str("name").unwrap().to_string(),
+                price: product_doc.get_f64("price").unwrap(),
             };
             Ok(product)
         } else {

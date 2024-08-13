@@ -1,20 +1,11 @@
-use neo4rs::*;
+use mongodb::{Client, Database};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-pub type Neo4jGraph = Arc<Mutex<Graph>>;
+pub type MongoDb = Arc<Mutex<Database>>;
 
-pub async fn connect_to_neo4j(uri: &str, user: &str, password: &str) -> Neo4jGraph {
-    let config = ConfigBuilder::default()
-        .uri(uri) // Use the provided URI
-        .user(user)
-        .password(password)
-        .db("neo4j")
-        .fetch_size(500)
-        .max_connections(10)
-        .build()
-        .unwrap();
-
-    let graph = Graph::connect(config).await.unwrap();
-    Arc::new(Mutex::new(graph))
+pub async fn connect_to_mongodb(uri: &str, db_name: &str) -> MongoDb {
+    let client = Client::with_uri_str(uri).await.expect("Failed to initialize MongoDB client");
+    let db = client.database(db_name);
+    Arc::new(Mutex::new(db))
 }
