@@ -1,6 +1,6 @@
 
 
-# Supergraph API with Subgraph GraphQL Implementation for MongoDB in Rust
+# Supergraph with Subgraph GraphQL Implementation in Rust
 
 This project demonstrates the implementation of a supergraph architecture using GraphQL in Rust. It allows for the composition of multiple GraphQL subgraphs into a single supergraph, enabling a federated approach to querying across various microservices or data sources.
 
