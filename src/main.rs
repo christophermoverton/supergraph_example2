@@ -23,7 +23,7 @@ async fn main() -> std::io::Result<()> {
     let neo4j_graph = connect_to_neo4j("bolt://localhost:7687", "neo4j", "palapala").await;
 
     let schema = schema::create_schema()
-        .data(neo4j_graph) // Attach the Neo4j connection to the schema context
+        .data(neo4j_graph)
         .finish();
 
     HttpServer::new(move || {
