@@ -1,83 +1,86 @@
 
-# Neo4j GraphQL Example in Rust
-
-This project is an example of a GraphQL API implemented in Rust, integrated with a Neo4j database. The API demonstrates how to set up a modular GraphQL schema with subgraphs, connect to a Neo4j database, and perform basic queries.
-
-## Project Structure
 
 
-.
-├── Cargo.toml           # Project dependencies and metadata
-├── src
-│   ├── db.rs            # Neo4j database connection setup
-│   ├── main.rs          # Entry point for the Actix web server
-│   └── schema
-│       ├── mod.rs       # Main schema setup and subgraph integration
-│       ├── subgraph1.rs # Subgraph 1: User-related queries
-│       └── subgraph2.rs # Subgraph 2: Product-related queries
-└── README.md            # This README file
+# Neo4j GraphQL Example
 
+This project is a Rust-based GraphQL API that integrates with a Neo4j database. It demonstrates how to perform CRUD operations on `User` and `Product` entities using GraphQL mutations and queries. The project is built using the following technologies:
+
+- **Rust**
+- **async-graphql**: A GraphQL server implementation in Rust.
+- **neo4rs**: A Neo4j driver for Rust.
+- **tokio**: An asynchronous runtime for Rust.
 
 ## Features
 
-- **GraphQL API**: Exposes a GraphQL API using `async-graphql`.
-- **Subgraphs**: Modular GraphQL schema split into subgraphs (`User` and `Product`).
-- **Neo4j Integration**: Connects to a Neo4j database using `neo4rs` for data storage and retrieval.
-- **Actix Web Server**: Runs the GraphQL API on an Actix web server.
+- **Create, Read, and Delete Users**: GraphQL mutations and queries to manage user entities.
+- **Create, Read, and Delete Products**: GraphQL mutations and queries to manage product entities.
+- **Neo4j Integration**: All data is stored and retrieved from a Neo4j database.
 
 ## Prerequisites
 
-- **Rust**: Ensure you have Rust installed. You can install Rust using [rustup](https://rustup.rs/).
-- **Neo4j**: You need a running instance of Neo4j. Install Neo4j [here](https://neo4j.com/download/).
+- **Rust**: Ensure you have Rust installed. If not, you can install it from [here](https://www.rust-lang.org/).
+- **Neo4j**: A running Neo4j instance. You can download and install Neo4j from [here](https://neo4j.com/download/).
+- **Cargo**: Rust's package manager.
 
-## Installation
+## Getting Started
 
-1. **Clone the Repository**
+### 1. Clone the Repository
 
-   ```bash
-   git clone -b neo4j_example https://github.com/yourusername/your-repo-name.git
-   cd your-repo-name
-   ```
+```sh
+git clone https://github.com/your-username/neo4j_graphql_example.git
+cd neo4j_graphql_example
+```
 
-2. **Install Dependencies**
+### 2. Set Up Neo4j
 
-   Run the following command to install the project dependencies:
+Ensure your Neo4j database is running locally:
 
-   ```bash
-   cargo build
-   ```
+- **Default URI**: `127.0.0.1:7687`
+- **Default Username**: `neo4j`
+- **Default Password**: `neo` (or whatever password you set)
 
-3. **Set Up Neo4j**
+You can adjust the database credentials in the `db.rs` file if necessary.
 
-   Ensure your Neo4j database is running. By default, this example assumes Neo4j is running locally at `bolt://localhost:7687` with the username `neo4j` and password `password`.
+### 3. Build the Project
 
-   You can change these settings in `src/db.rs`.
+Use Cargo to build the project:
 
-4. **Insert Test Data into Neo4j**
+```sh
+cargo build
+```
 
-   Use the Neo4j browser or a Cypher script to insert some test data:
+### 4. Run the Project
 
-   ```cypher
-   CREATE (u:User {id: '1', name: 'Alice', email: 'alice@example.com'});
-   CREATE (p:Product {id: '1', name: 'Laptop', price: 999.99});
-   ```
+Start the GraphQL server:
 
-## Running the Server
-
-To run the server, use:
-
-```bash
+```sh
 cargo run
 ```
 
-The server will start on `http://127.0.0.1:8080`. The GraphQL Playground will be accessible at `http://127.0.0.1:8080/playground`.
+The server will start at `http://localhost:8000/graphql`.
 
-## Example Queries
+### 5. Test the API
 
-### Fetch a User by ID
+You can use tools like [Postman](https://www.postman.com/), [Insomnia](https://insomnia.rest/), or the built-in GraphQL Playground to interact with the API.
+
+### Example GraphQL Queries and Mutations
+
+#### Create a User
 
 ```graphql
-{
+mutation {
+  createUser(input: {id: "1", name: "John Doe", email: "john.doe@example.com"}) {
+    id
+    name
+    email
+  }
+}
+```
+
+#### Query a User
+
+```graphql
+query {
   user(id: "1") {
     id
     name
@@ -86,10 +89,30 @@ The server will start on `http://127.0.0.1:8080`. The GraphQL Playground will be
 }
 ```
 
-### Fetch a Product by ID
+#### Delete a User
 
 ```graphql
-{
+mutation {
+  deleteUser(id: "1")
+}
+```
+
+#### Create a Product
+
+```graphql
+mutation {
+  createProduct(input: {id: "1", name: "Laptop", price: 999.99}) {
+    id
+    name
+    price
+  }
+}
+```
+
+#### Query a Product
+
+```graphql
+query {
   product(id: "1") {
     id
     name
@@ -98,19 +121,55 @@ The server will start on `http://127.0.0.1:8080`. The GraphQL Playground will be
 }
 ```
 
-## Stopping the Server
+#### Delete a Product
 
-To stop the server, find the process ID (PID) and kill it:
-
-```bash
-ps aux | grep your-binary-name
-kill <PID>
+```graphql
+mutation {
+  deleteProduct(id: "1")
+}
 ```
 
-## Contributing
+### 6. Verify Data in Neo4j
 
-Feel free to fork the repository, submit issues, and create pull requests.
+You can verify the data stored in Neo4j by accessing the Neo4j Browser at `http://localhost:7474` and running queries like:
+
+```cypher
+MATCH (u:User) RETURN u;
+MATCH (p:Product) RETURN p;
+```
+
+## Project Structure
+
+- `src/main.rs`: The main entry point of the application.
+- `src/schema/subgraph1.rs`: Defines GraphQL types and resolvers for `User` operations.
+- `src/schema/subgraph2.rs`: Defines GraphQL types and resolvers for `Product` operations.
+- `src/db.rs`: Handles the connection to the Neo4j database.
+
+## Dependencies
+
+This project uses the following Rust crates:
+
+- `async-graphql`: For handling GraphQL requests.
+- `neo4rs`: For interacting with the Neo4j database.
+- `tokio`: For asynchronous runtime.
+
+## Troubleshooting
+
+- **Neo4j Connection Issues**: Ensure your Neo4j instance is running and accessible at the specified URI.
+- **GraphQL Errors**: Use the error messages provided by the GraphQL API to troubleshoot issues with queries or mutations.
+- **Rust Compilation Errors**: Ensure all dependencies are correctly specified in `Cargo.toml`.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+
+## Acknowledgments
+
+- [Neo4j](https://neo4j.com/) for the graph database.
+- [async-graphql](https://github.com/async-graphql/async-graphql) for the GraphQL server library.
+- [neo4rs](https://github.com/neo4j/neo4j-rust) for the Neo4j Rust driver.
+
+## Contributing
+
+Contributions are welcome! Feel free to open issues or submit pull requests.
+
