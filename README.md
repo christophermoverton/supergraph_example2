@@ -1,7 +1,5 @@
-Here's a `README.md` file for your MongoDB-based Rust GraphQL project:
 
-
-# MongoDB GraphQL API in Rust
+# MongoDB Supergraph GraphQL API Example in Rust
 
 This project is an example of a GraphQL API implemented in Rust, with MongoDB as the backend database. It demonstrates how to set up a GraphQL server using `async-graphql` and `actix-web`, and how to connect to a MongoDB database using the `mongodb` crate.
 
