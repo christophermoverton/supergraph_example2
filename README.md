@@ -18,67 +18,85 @@ This project is an example of a GraphQL API implemented in Rust, with MongoDB as
 └── README.md            # This README file
 ```
 
+
+
+This project is a Rust-based GraphQL API that integrates with a MongoDB database. It demonstrates how to perform CRUD operations on `User` and `Product` entities using GraphQL mutations and queries. The project is built using the following technologies:
+
+- **Rust**
+- **async-graphql**: A GraphQL server implementation in Rust.
+- **mongodb**: An official MongoDB driver for Rust.
+- **tokio**: An asynchronous runtime for Rust.
+
 ## Features
 
-- **GraphQL API**: Exposes a GraphQL API using `async-graphql`.
-- **Subgraphs**: Modular GraphQL schema split into subgraphs (`User` and `Product`).
-- **MongoDB Integration**: Connects to a MongoDB database using the official `mongodb` crate.
-- **Actix Web Server**: Runs the GraphQL API on an Actix web server.
+- **Create, Read, and Delete Users**: GraphQL mutations and queries to manage user entities.
+- **Create, Read, and Delete Products**: GraphQL mutations and queries to manage product entities.
+- **MongoDB Integration**: All data is stored and retrieved from a MongoDB database.
 
 ## Prerequisites
 
-- **Rust**: Ensure you have Rust installed. You can install Rust using [rustup](https://rustup.rs/).
-- **MongoDB**: You need a running instance of MongoDB. Install MongoDB [here](https://docs.mongodb.com/manual/installation/).
+- **Rust**: Ensure you have Rust installed. If not, you can install it from [here](https://www.rust-lang.org/).
+- **MongoDB**: A running MongoDB instance. You can download and install MongoDB from [here](https://www.mongodb.com/try/download/community).
+- **Cargo**: Rust's package manager.
 
-## Installation
+## Getting Started
 
-1. **Clone the Repository**
+### 1. Clone the Repository
 
-   ```bash
-   git clone -b mongodb_example https://github.com/yourusername/your-repo-name.git
-   cd your-repo-name
-   ```
+```sh
+git clone https://github.com/your-username/mongodb_graphql_example.git
+cd mongodb_graphql_example
+```
 
-2. **Install Dependencies**
+### 2. Set Up MongoDB
 
-   Run the following command to install the project dependencies:
+Ensure your MongoDB database is running locally:
 
-   ```bash
-   cargo build
-   ```
+- **Default URI**: `mongodb://localhost:27017`
+- **Database Name**: `graphql_db`
 
-3. **Set Up MongoDB**
+You can adjust the database URI in the `db.rs` file if necessary.
 
-   Ensure your MongoDB instance is running. By default, this example assumes MongoDB is running locally at `mongodb://localhost:27017` with the database name `mydatabase`.
+### 3. Build the Project
 
-   You can change these settings in `src/db.rs`.
+Use Cargo to build the project:
 
-4. **Insert Test Data into MongoDB**
+```sh
+cargo build
+```
 
-   Use the MongoDB shell or any MongoDB client to insert some test data:
+### 4. Run the Project
 
-   ```javascript
-   use mydatabase;
-   db.users.insertOne({ id: "1", name: "Alice", email: "alice@example.com" });
-   db.products.insertOne({ id: "1", name: "Laptop", price: 999.99 });
-   ```
+Start the GraphQL server:
 
-## Running the Server
-
-To run the server, use:
-
-```bash
+```sh
 cargo run
 ```
 
-The server will start on `http://127.0.0.1:8080`. The GraphQL Playground will be accessible at `http://127.0.0.1:8080/playground`.
+The server will start at `http://localhost:8000/graphql`.
 
-## Example Queries
+### 5. Test the API
 
-### Fetch a User by ID
+You can use tools like [Postman](https://www.postman.com/), [Insomnia](https://insomnia.rest/), or the built-in GraphQL Playground to interact with the API.
+
+### Example GraphQL Queries and Mutations
+
+#### Create a User
 
 ```graphql
-{
+mutation {
+  createUser(input: {id: "1", name: "John Doe", email: "john.doe@example.com"}) {
+    id
+    name
+    email
+  }
+}
+```
+
+#### Query a User
+
+```graphql
+query {
   user(id: "1") {
     id
     name
@@ -87,10 +105,30 @@ The server will start on `http://127.0.0.1:8080`. The GraphQL Playground will be
 }
 ```
 
-### Fetch a Product by ID
+#### Delete a User
 
 ```graphql
-{
+mutation {
+  deleteUser(id: "1")
+}
+```
+
+#### Create a Product
+
+```graphql
+mutation {
+  createProduct(input: {id: "1", name: "Laptop", price: 999.99}) {
+    id
+    name
+    price
+  }
+}
+```
+
+#### Query a Product
+
+```graphql
+query {
   product(id: "1") {
     id
     name
@@ -99,29 +137,66 @@ The server will start on `http://127.0.0.1:8080`. The GraphQL Playground will be
 }
 ```
 
-## Stopping the Server
+#### Delete a Product
 
-To stop the server, find the process ID (PID) and kill it:
-
-```bash
-ps aux | grep your-binary-name
-kill <PID>
+```graphql
+mutation {
+  deleteProduct(id: "1")
+}
 ```
+
+### 6. Verify Data in MongoDB
+
+You can verify the data stored in MongoDB by connecting to your MongoDB instance using the MongoDB Shell or a GUI like MongoDB Compass:
+
+- **Using MongoDB Shell:**
+  ```sh
+  mongo
+  use graphql_db
+  db.users.find({})
+  db.products.find({})
+  ```
+
+- **Using MongoDB Compass:**
+  - Connect to `mongodb://localhost:27017`.
+  - Browse the `graphql_db` database and view the `users` and `products` collections.
+
+## Project Structure
+
+- `src/main.rs`: The main entry point of the application.
+- `src/schema/subgraph1.rs`: Defines GraphQL types and resolvers for `User` operations.
+- `src/schema/subgraph2.rs`: Defines GraphQL types and resolvers for `Product` operations.
+- `src/db.rs`: Handles the connection to the MongoDB database.
+
+## Dependencies
+
+This project uses the following Rust crates:
+
+- `async-graphql`: For handling GraphQL requests.
+- `mongodb`: For interacting with the MongoDB database.
+- `tokio`: For asynchronous runtime.
 
 ## Troubleshooting
 
-### Common Issues
+- **MongoDB Connection Issues**: Ensure your MongoDB instance is running and accessible at the specified URI.
+- **GraphQL Errors**: Use the error messages provided by the GraphQL API to troubleshoot issues with queries or mutations.
+- **Rust Compilation Errors**: Ensure all dependencies are correctly specified in `Cargo.toml`.
 
-- **MongoDB Connection Issues**: Ensure MongoDB is running and accessible at the URI specified in `db.rs`.
-- **Missing Data**: If you receive errors about missing data, ensure the correct documents are inserted into MongoDB.
+## License
 
-### Logs
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
 
-Check the server logs for more information if you encounter any issues. Logs can provide detailed error messages and insights into what might be going wrong.
+## Acknowledgments
+
+- [MongoDB](https://www.mongodb.com/) for the database.
+- [async-graphql](https://github.com/async-graphql/async-graphql) for the GraphQL server library.
+- [mongodb](https://github.com/mongodb/mongo-rust-driver) for the MongoDB Rust driver.
 
 ## Contributing
 
-Feel free to fork the repository, submit issues, and create pull requests. Contributions are welcome!
+Contributions are welcome! Feel free to open issues or submit pull requests.
+
+
 
 ## License
 
