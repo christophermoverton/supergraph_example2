@@ -1,20 +1,34 @@
-use async_graphql::{Context, Object, Result, SimpleObject, InputObject};
-use neo4rs::{query, Node, Path, Graph};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use async_graphql::{Object, Context, Result};
+use sqlx::MySqlPool;
 
-#[derive(SimpleObject)]
-pub struct User {
-    id: String,
-    name: String,
-    email: String,
-}
+#[derive(Default)]
+pub struct Subgraph1Query;
 
-#[derive(InputObject)]
-pub struct NewUserInput {
-    id: String,
-    name: String,
-    email: String,
+#[Object]
+impl Subgraph1Query {
+    // Fetch a user by their ID
+    async fn get_user_by_id(&self, ctx: &Context<'_>, user_id: i32) -> Result<User> {
+        let pool = ctx.data::<MySqlPool>().unwrap();
+
+        let row = sqlx::query_as!(User, "SELECT id, name, email FROM users WHERE id = ?", user_id)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+
+        Ok(row)
+    }
+
+    // Fetch all users
+    async fn get_all_users(&self, ctx: &Context<'_>) -> Result<Vec<User>> {
+        let pool = ctx.data::<MySqlPool>().unwrap();
+
+        let rows = sqlx::query_as!(User, "SELECT id, name, email FROM users")
+            .fetch_all(pool)
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+
+        Ok(rows)
+    }
 }
 
 #[derive(Default)]
@@ -22,81 +36,47 @@ pub struct Subgraph1Mutation;
 
 #[Object]
 impl Subgraph1Mutation {
-    async fn create_user(&self, ctx: &Context<'_>, input: NewUserInput) -> Result<User> {
-        let graph = ctx.data::<Arc<Mutex<Graph>>>()?.lock().await;
-        let name = input.name.clone();
+    // Add a new user with name and email
+    async fn add_user(&self, ctx: &Context<'_>, name: String, email: String) -> Result<User> {
+        let pool = ctx.data::<MySqlPool>().unwrap();
 
-        graph
-            .run(
-                query("CREATE (u:User {id: $id, name: $name, email: $email})")
-                    .param("id", input.id.clone())
-                    .param("name", name.clone())
-                    .param("email", input.email.clone()),
-            )
+        let result = sqlx::query!("INSERT INTO users (name, email) VALUES (?, ?)", name, email)
+            .execute(pool)
             .await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to create user: {}", e)))?;
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
 
-        let mut result = graph
-            .execute(
-                query("MATCH (u:User { id: $id }) RETURN u")
-                    .param("id", input.id),
-            )
-            .await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to query user: {}", e)))?;
+        let id = result.last_insert_id();
 
-        if let Some(row) = result.next().await.unwrap() {
-            let node = row.get::<Node>("u").unwrap();
-            Ok(User {
-                id: node.get("id").unwrap(),
-                name: node.get("name").unwrap(),
-                email: node.get("email").unwrap(),
-            })
-        } else {
-            Err(async_graphql::Error::new("User creation failed"))
-        }
+        Ok(User { id: id as i32, name, email })
     }
 
-    async fn delete_user(&self, ctx: &Context<'_>, id: String) -> Result<bool> {
-        let graph = ctx.data::<Arc<Mutex<Graph>>>()?.lock().await;
-
-        let result = graph
-            .run(query("MATCH (u:User {id: $id}) DELETE u").param("id", id.clone()))
+    // Update a user's email by their ID
+    async fn update_user_email(&self, ctx: &Context<'_>, user_id: i32, new_email: String) -> Result<User> {
+        let pool = ctx.data::<MySqlPool>().unwrap();
+    
+        sqlx::query!("UPDATE users SET email = ? WHERE id = ?", new_email, user_id)
+            .execute(pool)
             .await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to delete user: {}", e)))?;
-
-        let mut result = graph
-            .execute(query("MATCH (u:User {id: $id}) RETURN u").param("id", id))
-            .await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to check user deletion: {}", e)))?;
-
-        Ok(result.next().await?.is_none())
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+    
+        let row = sqlx::query_as!(
+            User,
+            "SELECT id, name, email FROM users WHERE id = ?",
+            user_id
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+    
+        Ok(row)
     }
+    
 }
 
-#[derive(Default)]
-pub struct Subgraph1Query;
-
-#[Object]
-impl Subgraph1Query {
-    async fn user(&self, ctx: &Context<'_>, id: String) -> Result<User> {
-        let graph = ctx.data::<Arc<Mutex<Graph>>>()?.lock().await;
-        let mut result = graph
-            .execute(
-                query("MATCH (u:User { id: $id }) RETURN u")
-                    .param("id", id.clone()),
-            )
-            .await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to query user: {}", e)))?;
-
-        if let Some(row) = result.next().await.unwrap() {
-            let node = row.get::<Node>("u").unwrap();
-            Ok(User {
-                id: node.get("id").unwrap(),
-                name: node.get("name").unwrap(),
-                email: node.get("email").unwrap(),
-            })
-        } else {
-            Err(async_graphql::Error::new("User not found"))
-        }
-    }
+// Define the User GraphQL type
+#[derive(async_graphql::SimpleObject)]
+struct User {
+    id: i32,
+    name: String,
+    email: String,
 }

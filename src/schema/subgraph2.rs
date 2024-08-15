@@ -1,20 +1,53 @@
-use async_graphql::{Context, Object, Result, SimpleObject, InputObject};
-use neo4rs::{query, Node, Path, Graph};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use async_graphql::{Object, Context, Result};
+use sqlx::MySqlPool;
+use crate::schema::scalars::GraphQLBigDecimal;  // Import the custom scalar wrapper
 
-#[derive(SimpleObject)]
-pub struct Product {
-    id: String,
-    name: String,
-    price: f64,
-}
+#[derive(Default)]
+pub struct Subgraph2Query;
 
-#[derive(InputObject)]
-pub struct NewProductInput {
-    id: String,
-    name: String,
-    price: f64,
+#[Object]
+impl Subgraph2Query {
+    async fn get_product_by_id(&self, ctx: &Context<'_>, product_id: i32) -> Result<Product> {
+        let pool = ctx.data::<MySqlPool>().unwrap();
+
+        let row = sqlx::query!(
+            "SELECT id, name, price FROM products WHERE id = ?",
+            product_id
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+
+        let product = Product {
+            id: row.id,
+            name: row.name,
+            price: GraphQLBigDecimal(row.price),  // Use the custom wrapper
+        };
+
+        Ok(product)
+    }
+
+    async fn get_all_products(&self, ctx: &Context<'_>) -> Result<Vec<Product>> {
+        let pool = ctx.data::<MySqlPool>().unwrap();
+
+        let rows = sqlx::query!(
+            "SELECT id, name, price FROM products"
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+
+        let products = rows
+            .into_iter()
+            .map(|row| Product {
+                id: row.id,
+                name: row.name,
+                price: GraphQLBigDecimal(row.price),  // Use the custom wrapper
+            })
+            .collect();
+
+        Ok(products)
+    }
 }
 
 #[derive(Default)]
@@ -22,81 +55,42 @@ pub struct Subgraph2Mutation;
 
 #[Object]
 impl Subgraph2Mutation {
-    async fn create_product(&self, ctx: &Context<'_>, input: NewProductInput) -> Result<Product> {
-        let graph = ctx.data::<Arc<Mutex<Graph>>>()?.lock().await;
-        let name = input.name.clone();
+    async fn add_product(&self, ctx: &Context<'_>, name: String, price: GraphQLBigDecimal) -> Result<Product> {
+        let pool = ctx.data::<MySqlPool>().unwrap();
 
-        graph
-            .run(
-                query("CREATE (p:Product {id: $id, name: $name, price: $price})")
-                    .param("id", input.id.clone())
-                    .param("name", name.clone())
-                    .param("price", input.price),
-            )
-            .await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to create product: {}", e)))?;
+        let result = sqlx::query!(
+            "INSERT INTO products (name, price) VALUES (?, ?)",
+            name,
+            price.0  // Extract the inner BigDecimal
+        )
+        .execute(pool)
+        .await
+        .map_err(|e| async_graphql::Error::new(e.to_string()))?;
 
-        let mut result = graph
-            .execute(
-                query("MATCH (p:Product { id: $id }) RETURN p")
-                    .param("id", input.id),
-            )
-            .await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to query product: {}", e)))?;
+        let id = result.last_insert_id();
 
-        if let Some(row) = result.next().await.unwrap() {
-            let node = row.get::<Node>("p").unwrap();
-            Ok(Product {
-                id: node.get("id").unwrap(),
-                name: node.get("name").unwrap(),
-                price: node.get("price").unwrap(),
-            })
-        } else {
-            Err(async_graphql::Error::new("Product creation failed"))
-        }
+        Ok(Product { id: id as i32, name, price })
     }
 
-    async fn delete_product(&self, ctx: &Context<'_>, id: String) -> Result<bool> {
-        let graph = ctx.data::<Arc<Mutex<Graph>>>()?.lock().await;
+    async fn update_product_price(&self, ctx: &Context<'_>, product_id: i32, new_price: GraphQLBigDecimal) -> Result<String> {
+        let pool = ctx.data::<MySqlPool>().unwrap();
 
-        let result = graph
-            .run(query("MATCH (p:Product {id: $id}) DELETE p").param("id", id.clone()))
-            .await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to delete product: {}", e)))?;
+        sqlx::query!(
+            "UPDATE products SET price = ? WHERE id = ?",
+            new_price.0,  // Extract the inner BigDecimal
+            product_id
+        )
+        .execute(pool)
+        .await
+        .map_err(|e| async_graphql::Error::new(e.to_string()))?;
 
-        let mut result = graph
-            .execute(query("MATCH (p:Product {id: $id}) RETURN p").param("id", id))
-            .await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to check product deletion: {}", e)))?;
-
-        Ok(result.next().await?.is_none())
+        Ok(format!("Product ID {} updated successfully", product_id))
     }
 }
 
-#[derive(Default)]
-pub struct Subgraph2Query;
-
-#[Object]
-impl Subgraph2Query {
-    async fn product(&self, ctx: &Context<'_>, id: String) -> Result<Product> {
-        let graph = ctx.data::<Arc<Mutex<Graph>>>()?.lock().await;
-        let mut result = graph
-            .execute(
-                query("MATCH (p:Product { id: $id }) RETURN p")
-                    .param("id", id.clone()),
-            )
-            .await
-            .map_err(|e| async_graphql::Error::new(format!("Failed to query product: {}", e)))?;
-
-        if let Some(row) = result.next().await.unwrap() {
-            let node = row.get::<Node>("p").unwrap();
-            Ok(Product {
-                id: node.get("id").unwrap(),
-                name: node.get("name").unwrap(),
-                price: node.get("price").unwrap(),
-            })
-        } else {
-            Err(async_graphql::Error::new("Product not found"))
-        }
-    }
+#[derive(async_graphql::SimpleObject)]
+struct Product {
+    id: i32,
+    name: String,
+    price: GraphQLBigDecimal,  // Use the custom wrapper
 }
