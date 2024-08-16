@@ -1,49 +1,23 @@
-use async_graphql::{Object, Context, Result};
-use sqlx::MySqlPool;
-use crate::schema::scalars::GraphQLBigDecimal;  // Import the custom scalar wrapper
+use async_graphql::{Context, Object, Result};
+use redis::AsyncCommands;
+use crate::models::Product;
+use serde_json;
+//use uuid::Uuid;
+
 
 #[derive(Default)]
-pub struct Subgraph2Query;
+pub struct ProductQuery;
 
 #[Object]
-impl Subgraph2Query {
-    async fn get_product_by_id(&self, ctx: &Context<'_>, product_id: i32) -> Result<Product> {
-        let pool = ctx.data::<MySqlPool>().unwrap();
-
-        let row = sqlx::query!(
-            "SELECT id, name, price FROM products WHERE id = ?",
-            product_id
-        )
-        .fetch_one(pool)
-        .await
-        .map_err(|e| async_graphql::Error::new(e.to_string()))?;
-
-        let product = Product {
-            id: row.id,
-            name: row.name,
-            price: GraphQLBigDecimal(row.price),  // Use the custom wrapper
-        };
-
-        Ok(product)
-    }
-
+impl ProductQuery {
     async fn get_all_products(&self, ctx: &Context<'_>) -> Result<Vec<Product>> {
-        let pool = ctx.data::<MySqlPool>().unwrap();
-
-        let rows = sqlx::query!(
-            "SELECT id, name, price FROM products"
-        )
-        .fetch_all(pool)
-        .await
-        .map_err(|e| async_graphql::Error::new(e.to_string()))?;
-
-        let products = rows
+        let redis_client = ctx.data::<redis::Client>()?;
+        let mut con = redis_client.get_async_connection().await?;
+        let products: Vec<String> = con.smembers("products").await?;
+        
+        let products: Vec<Product> = products
             .into_iter()
-            .map(|row| Product {
-                id: row.id,
-                name: row.name,
-                price: GraphQLBigDecimal(row.price),  // Use the custom wrapper
-            })
+            .filter_map(|p| serde_json::from_str(&p).ok())
             .collect();
 
         Ok(products)
@@ -51,46 +25,23 @@ impl Subgraph2Query {
 }
 
 #[derive(Default)]
-pub struct Subgraph2Mutation;
+pub struct ProductMutation;
 
 #[Object]
-impl Subgraph2Mutation {
-    async fn add_product(&self, ctx: &Context<'_>, name: String, price: GraphQLBigDecimal) -> Result<Product> {
-        let pool = ctx.data::<MySqlPool>().unwrap();
+impl ProductMutation {
+    async fn add_product(&self, ctx: &Context<'_>, name: String, price: f64) -> Result<Product> {
+        let redis_client = ctx.data::<redis::Client>()?;
+        let mut con = redis_client.get_async_connection().await?;
 
-        let result = sqlx::query!(
-            "INSERT INTO products (name, price) VALUES (?, ?)",
+        let product = Product {
+            id: uuid::Uuid::new_v4().to_string(),
             name,
-            price.0  // Extract the inner BigDecimal
-        )
-        .execute(pool)
-        .await
-        .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+            price,
+        };
 
-        let id = result.last_insert_id();
-
-        Ok(Product { id: id as i32, name, price })
+        let product_json = serde_json::to_string(&product)?;
+        con.sadd("products", product_json).await?;
+        
+        Ok(product)
     }
-
-    async fn update_product_price(&self, ctx: &Context<'_>, product_id: i32, new_price: GraphQLBigDecimal) -> Result<String> {
-        let pool = ctx.data::<MySqlPool>().unwrap();
-
-        sqlx::query!(
-            "UPDATE products SET price = ? WHERE id = ?",
-            new_price.0,  // Extract the inner BigDecimal
-            product_id
-        )
-        .execute(pool)
-        .await
-        .map_err(|e| async_graphql::Error::new(e.to_string()))?;
-
-        Ok(format!("Product ID {} updated successfully", product_id))
-    }
-}
-
-#[derive(async_graphql::SimpleObject)]
-struct Product {
-    id: i32,
-    name: String,
-    price: GraphQLBigDecimal,  // Use the custom wrapper
 }

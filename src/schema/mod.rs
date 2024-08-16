@@ -1,22 +1,25 @@
+// src/schema/mod.rs
+
 use async_graphql::{Schema, MergedObject};
-use crate::schema::subgraph1::{Subgraph1Query, Subgraph1Mutation};
-use crate::schema::subgraph2::{Subgraph2Query, Subgraph2Mutation};
-use sqlx::MySqlPool;
+use redis::Client;
 
 pub mod subgraph1;
 pub mod subgraph2;
-pub mod scalars;  // Include scalars.rs
 
+// QueryRoot combines all queries from subgraphs
 #[derive(MergedObject, Default)]
-pub struct QueryRoot(Subgraph1Query, Subgraph2Query);
+pub struct QueryRoot(subgraph1::UserQuery, subgraph2::ProductQuery);
 
+// MutationRoot combines all mutations from subgraphs
 #[derive(MergedObject, Default)]
-pub struct MutationRoot(Subgraph1Mutation, Subgraph2Mutation);
+pub struct MutationRoot(subgraph1::UserMutation, subgraph2::ProductMutation);
 
+// Type alias for the entire GraphQL schema
 pub type AppSchema = Schema<QueryRoot, MutationRoot, async_graphql::EmptySubscription>;
 
-pub fn create_schema(pool: MySqlPool) -> AppSchema {
+// Function to create and return the GraphQL schema, injecting the Redis client
+pub fn create_schema(redis_client: Client) -> AppSchema {
     Schema::build(QueryRoot::default(), MutationRoot::default(), async_graphql::EmptySubscription)
-        .data(pool)
+        .data(redis_client)
         .finish()
 }

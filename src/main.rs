@@ -1,12 +1,13 @@
 use actix_web::{web, App, HttpServer};
 use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
-use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
-use actix_web::{guard, HttpResponse};
+//use async_graphql::{Schema, MergedObject};
+//use redis::AsyncCommands;
+use redis::Client;
 use dotenv::dotenv;
-use sqlx::mysql::MySqlPoolOptions;
 use std::env;
 
 mod schema;
+mod models;
 
 async fn graphql_handler(
     schema: web::Data<schema::AppSchema>,
@@ -15,37 +16,30 @@ async fn graphql_handler(
     schema.execute(req.into_inner()).await.into()
 }
 
-async fn graphql_playground() -> HttpResponse {
-    HttpResponse::Ok()
+async fn graphql_playground() -> actix_web::HttpResponse {
+    actix_web::HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
-        .body(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
+        .body(async_graphql::http::playground_source(async_graphql::http::GraphQLPlaygroundConfig::new("/graphql")))
 }
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
-
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let pool = MySqlPoolOptions::new()
-        .max_connections(5)
-        .connect(&database_url)
-        .await
-        .expect("Failed to create MySQL pool");
-
-    let schema = schema::create_schema(pool.clone());
+    let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
+    let redis_client = Client::open(redis_url).expect("Invalid Redis URL");
+    let schema = schema::create_schema(redis_client);
 
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(schema.clone()))
-            .app_data(web::Data::new(pool.clone()))
             .service(
                 web::resource("/graphql")
-                    .guard(guard::Post())
+                    .guard(actix_web::guard::Post())
                     .to(graphql_handler),
             )
             .service(
                 web::resource("/playground")
-                    .guard(guard::Get())
+                    .guard(actix_web::guard::Get())
                     .to(graphql_playground),
             )
     })
